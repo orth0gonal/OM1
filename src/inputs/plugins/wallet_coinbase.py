@@ -5,7 +5,8 @@ import time
 from dataclasses import dataclass
 from typing import List, Optional
 
-from cdp import Cdp, Wallet
+from eth_account import Account
+from web3 import Web3
 
 from inputs.base import SensorConfig
 from inputs.base.loop import FuserInput
@@ -32,39 +33,48 @@ class WalletCoinbase(FuserInput[float]):
         self.messages: List[Message] = []
 
         self.POLL_INTERVAL = 0.5  # seconds between blockchain data updates
-        self.COINBASE_WALLET_ID = os.environ.get("COINBASE_WALLET_ID")
-        logging.info(f"Using {self.COINBASE_WALLET_ID} as the coinbase wallet id")
+        self.account: Optional[Account] = None
+        self.w3: Optional[Web3] = None
 
-        # Initialize Wallet
-        # TODO(Kyle): Create Wallet if the wallet ID is not found
-        # TODO(Kyle): Support importing other wallets, following https://docs.cdp.coinbase.com/mpc-wallet/docs/wallets#importing-a-wallet
-        API_KEY = os.environ.get("COINBASE_API_KEY")
-        API_SECRET = os.environ.get("COINBASE_API_SECRET")
-        if not API_KEY or not API_SECRET:
-            logging.error(
-                "COINBASE_API_KEY or COINBASE_API_SECRET environment variable is not set"
-            )
-        else:
-            Cdp.configure(API_KEY, API_SECRET)
+        # Get private key from environment
+        private_key = os.environ.get("ETH_PRIVATE_KEY")
+        if not private_key:
+            logging.error("ETH_PRIVATE_KEY environment variable is not set")
+            self.ETH_balance = 0.0
+            self.ETH_balance_previous = 0.0
+            return
+
+        # Get RPC URL (default to Base Sepolia testnet)
+        rpc_url = os.environ.get("ETH_RPC_URL", "https://sepolia.base.org")
 
         try:
-            # fetch wallet data
-            if not self.COINBASE_WALLET_ID:
-                raise ValueError("COINBASE_WALLET_ID environment variable is not set")
+            # Initialize Web3 connection
+            self.w3 = Web3(Web3.HTTPProvider(rpc_url))
 
-            self.wallet = Wallet.fetch(self.COINBASE_WALLET_ID)
-            logging.info(f"Wallet: {self.wallet}")
+            # Create account from private key
+            if not private_key.startswith("0x"):
+                private_key = "0x" + private_key
+            self.account = Account.from_key(private_key)
+
+            logging.info(f"WalletCoinbase initialized with address: {self.account.address}")
+            logging.info(f"Connected to network: {rpc_url}")
+
+            # Get initial balance
+            balance_wei = self.w3.eth.get_balance(self.account.address)
+            self.ETH_balance = float(self.w3.from_wei(balance_wei, 'ether'))
+            self.ETH_balance_previous = self.ETH_balance
+            logging.info("Testing: WalletCoinbase: Initialized")
         except Exception as e:
-            logging.error(f"Error fetching Coinbase Wallet data: {e}")
-
-        self.ETH_balance = float(self.wallet.balance("eth"))
-        self.ETH_balance_previous = self.ETH_balance
-
-        logging.info("Testing: WalletCoinbase: Initialized")
+            logging.error(f"Error initializing wallet: {e}")
+            logging.error("Make sure ETH_PRIVATE_KEY is set correctly")
+            self.account = None
+            self.w3 = None
+            self.ETH_balance = 0.0
+            self.ETH_balance_previous = 0.0
 
     async def _poll(self) -> List[float]:
         """
-        Poll for Coinbase Wallet balance updates.
+        Poll for Ethereum Wallet balance updates.
 
         Returns
         -------
@@ -73,19 +83,24 @@ class WalletCoinbase(FuserInput[float]):
         """
         await asyncio.sleep(self.POLL_INTERVAL)
 
-        # randomly simulate ETH inbound transfers for debugging purposes
-        # if random.randint(0, 10) > 7:
-        #     faucet_transaction = self.wallet.faucet(asset_id='eth')
-        #     faucet_transaction.wait()
-        #     logging.info(f"WalletCoinbase: Faucet transaction: {faucet_transaction}")
+        if not self.account or not self.w3:
+            logging.warning("WalletCoinbase: Wallet not initialized, skipping poll")
+            return [self.ETH_balance, 0.0]
 
-        self.wallet = Wallet.fetch(self.COINBASE_WALLET_ID)  # type: ignore
-        logging.info(
-            f"WalletCoinbase: Wallet refreshed: {self.wallet.balance('eth')}, the current balance is {self.ETH_balance}"
-        )
-        self.ETH_balance = float(self.wallet.balance("eth"))
-        balance_change = self.ETH_balance - self.ETH_balance_previous
-        self.ETH_balance_previous = self.ETH_balance
+        try:
+            # Get current balance
+            balance_wei = self.w3.eth.get_balance(self.account.address)
+            self.ETH_balance = float(self.w3.from_wei(balance_wei, 'ether'))
+
+            logging.info(
+                f"WalletCoinbase: Wallet refreshed: {self.ETH_balance} ETH, previous balance was {self.ETH_balance_previous}"
+            )
+
+            balance_change = self.ETH_balance - self.ETH_balance_previous
+            self.ETH_balance_previous = self.ETH_balance
+        except Exception as e:
+            logging.error(f"WalletCoinbase: Error polling wallet: {e}")
+            balance_change = 0.0
 
         return [self.ETH_balance, balance_change]
 
