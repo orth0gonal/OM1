@@ -32,9 +32,12 @@ class WalletCoinbase(FuserInput[float]):
         self.io_provider = IOProvider()
         self.messages: List[Message] = []
 
-        self.POLL_INTERVAL = 0.5  # seconds between blockchain data updates
+        # Get hertz from config (default to 0.01 if not specified)
+        hertz = config.hertz if hasattr(config, 'hertz') and config.hertz else 0.01
+        self.POLL_INTERVAL = 1.0 / hertz  # seconds between blockchain data updates
         self.account: Optional[Account] = None
         self.w3: Optional[Web3] = None
+        self.last_block: Optional[int] = None
 
         # Get private key from environment
         private_key = os.environ.get("ETH_PRIVATE_KEY")
@@ -59,11 +62,12 @@ class WalletCoinbase(FuserInput[float]):
             logging.info(f"WalletCoinbase initialized with address: {self.account.address}")
             logging.info(f"Connected to network: {rpc_url}")
 
-            # Get initial balance
+            # Get initial balance and block number
             balance_wei = self.w3.eth.get_balance(self.account.address)
             self.ETH_balance = float(self.w3.from_wei(balance_wei, 'ether'))
             self.ETH_balance_previous = self.ETH_balance
-            logging.info("Testing: WalletCoinbase: Initialized")
+            self.last_block = self.w3.eth.block_number
+            logging.info(f"Testing: WalletCoinbase: Initialized at block {self.last_block}")
         except Exception as e:
             logging.error(f"Error initializing wallet: {e}")
             logging.error("Make sure ETH_PRIVATE_KEY is set correctly")
@@ -74,7 +78,7 @@ class WalletCoinbase(FuserInput[float]):
 
     async def _poll(self) -> List[float]:
         """
-        Poll for Ethereum Wallet balance updates.
+        Poll for Ethereum Wallet balance updates from incoming transfers only.
 
         Returns
         -------
@@ -87,17 +91,43 @@ class WalletCoinbase(FuserInput[float]):
             logging.warning("WalletCoinbase: Wallet not initialized, skipping poll")
             return [self.ETH_balance, 0.0]
 
+        balance_change = 0.0
+
         try:
-            # Get current balance
-            balance_wei = self.w3.eth.get_balance(self.account.address)
-            self.ETH_balance = float(self.w3.from_wei(balance_wei, 'ether'))
+            current_block = self.w3.eth.block_number
 
-            logging.info(
-                f"WalletCoinbase: Wallet refreshed: {self.ETH_balance} ETH, previous balance was {self.ETH_balance_previous}"
-            )
+            # Check for incoming transfers in new blocks
+            if self.last_block is not None and current_block > self.last_block:
+                # Scan new blocks for incoming transfers
+                for block_num in range(self.last_block + 1, current_block + 1):
+                    try:
+                        block = self.w3.eth.get_block(block_num, full_transactions=True)
 
-            balance_change = self.ETH_balance - self.ETH_balance_previous
-            self.ETH_balance_previous = self.ETH_balance
+                        # Check all transactions in the block
+                        for tx in block.transactions:
+                            # Check if this is an incoming transfer to our address
+                            if tx.get('to') and tx['to'].lower() == self.account.address.lower():
+                                tx_value = float(self.w3.from_wei(tx['value'], 'ether'))
+                                if tx_value > 0:
+                                    balance_change += tx_value
+                                    logging.info(
+                                        f"WalletCoinbase: Incoming transfer detected: {tx_value} ETH from {tx['from']}"
+                                    )
+                    except Exception as e:
+                        logging.error(f"WalletCoinbase: Error processing block {block_num}: {e}")
+
+            self.last_block = current_block
+
+            # Update balance if there was an incoming transfer
+            if balance_change > 0:
+                balance_wei = self.w3.eth.get_balance(self.account.address)
+                self.ETH_balance = float(self.w3.from_wei(balance_wei, 'ether'))
+                self.ETH_balance_previous = self.ETH_balance
+
+                logging.info(
+                    f"WalletCoinbase: Balance updated: {self.ETH_balance} ETH (received {balance_change} ETH)"
+                )
+
         except Exception as e:
             logging.error(f"WalletCoinbase: Error polling wallet: {e}")
             balance_change = 0.0

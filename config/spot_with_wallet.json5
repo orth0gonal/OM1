@@ -1,5 +1,5 @@
 {
-  "hertz": 50,
+  "hertz": 0.01,
   "name": "spot_speak_wallet",
   "api_key": "openmind_free",
   "robot_ip": "",

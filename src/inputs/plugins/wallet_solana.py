@@ -35,10 +35,13 @@ class WalletSolana(FuserInput[float]):
         self.io_provider = IOProvider()
         self.messages: List[Message] = []
 
-        self.POLL_INTERVAL = 0.5  # seconds between blockchain data updates
+        # Get hertz from config (default to 0.01 if not specified)
+        hertz = config.hertz if hasattr(config, 'hertz') and config.hertz else 0.01
+        self.POLL_INTERVAL = 1.0 / hertz  # seconds between blockchain data updates
         self.keypair: Optional[Keypair] = None
         self.client: Optional[AsyncClient] = None
         self.pubkey: Optional[Pubkey] = None
+        self.last_signature: Optional[str] = None
 
         # Get private key from environment
         private_key = os.environ.get("SOLANA_PRIVATE_KEY")
@@ -85,7 +88,7 @@ class WalletSolana(FuserInput[float]):
 
     async def _poll(self) -> List[float]:
         """
-        Poll for Solana Wallet balance updates.
+        Poll for Solana Wallet balance updates from incoming transfers only.
 
         Returns
         -------
@@ -98,18 +101,76 @@ class WalletSolana(FuserInput[float]):
             logging.warning("WalletSolana: Wallet not initialized, skipping poll")
             return [self.SOL_balance, 0.0]
 
-        try:
-            # Get current balance
-            response = await self.client.get_balance(self.pubkey)
-            balance_lamports = response.value
-            self.SOL_balance = float(balance_lamports) / 1_000_000_000  # Convert lamports to SOL
+        balance_change = 0.0
 
-            logging.info(
-                f"WalletSolana: Wallet refreshed: {self.SOL_balance} SOL, previous balance was {self.SOL_balance_previous}"
+        try:
+            # Get recent transactions
+            response = await self.client.get_signatures_for_address(
+                self.pubkey,
+                limit=10
             )
 
-            balance_change = self.SOL_balance - self.SOL_balance_previous
-            self.SOL_balance_previous = self.SOL_balance
+            if response.value:
+                signatures = response.value
+                new_signatures = []
+
+                # Find new transactions since last check
+                for sig_info in signatures:
+                    if self.last_signature and sig_info.signature == self.last_signature:
+                        break
+                    new_signatures.append(sig_info)
+
+                # Update last signature
+                if signatures:
+                    self.last_signature = signatures[0].signature
+
+                # Check each new transaction for incoming transfers
+                for sig_info in reversed(new_signatures):  # Process oldest first
+                    try:
+                        tx_response = await self.client.get_transaction(
+                            sig_info.signature,
+                            max_supported_transaction_version=0
+                        )
+
+                        if tx_response.value:
+                            tx = tx_response.value
+                            meta = tx.transaction.meta
+
+                            if meta and meta.post_balances and meta.pre_balances:
+                                # Find our account index in the transaction
+                                account_keys = tx.transaction.transaction.message.account_keys
+                                try:
+                                    account_index = account_keys.index(self.pubkey)
+
+                                    # Calculate balance change for our account
+                                    pre_balance = meta.pre_balances[account_index]
+                                    post_balance = meta.post_balances[account_index]
+                                    lamports_change = post_balance - pre_balance
+
+                                    # Only count incoming transfers (positive change)
+                                    if lamports_change > 0:
+                                        sol_change = float(lamports_change) / 1_000_000_000
+                                        balance_change += sol_change
+                                        logging.info(
+                                            f"WalletSolana: Incoming transfer detected: {sol_change} SOL (tx: {sig_info.signature})"
+                                        )
+                                except (ValueError, IndexError) as e:
+                                    logging.debug(f"WalletSolana: Account not found in transaction: {e}")
+
+                    except Exception as e:
+                        logging.error(f"WalletSolana: Error processing transaction {sig_info.signature}: {e}")
+
+            # Update balance if there was an incoming transfer
+            if balance_change > 0:
+                response = await self.client.get_balance(self.pubkey)
+                balance_lamports = response.value
+                self.SOL_balance = float(balance_lamports) / 1_000_000_000
+                self.SOL_balance_previous = self.SOL_balance
+
+                logging.info(
+                    f"WalletSolana: Balance updated: {self.SOL_balance} SOL (received {balance_change} SOL)"
+                )
+
         except Exception as e:
             logging.error(f"WalletSolana: Error polling wallet: {e}")
             balance_change = 0.0
