@@ -2,7 +2,7 @@ import logging
 import multiprocessing as mp
 import os
 
-import dotenv
+from dotenv import load_dotenv
 import json5
 import typer
 
@@ -128,5 +128,5 @@ if __name__ == "__main__":
     if mp.get_start_method(allow_none=True) != "spawn":
         mp.set_start_method("spawn")
 
-    dotenv.load_dotenv()
+    load_dotenv()
     app()
