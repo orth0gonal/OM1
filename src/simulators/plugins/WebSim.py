@@ -215,6 +215,7 @@ class WebSim(Simulator):
         <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
         <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
         <script src="https://cdn.ethers.io/lib/ethers-5.6.umd.min.js"></script>
+        <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
         <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
         <style>
             .wallet-card {
@@ -543,14 +544,44 @@ class WebSim(Simulator):
                     if (!amount) return;
 
                     try {
-                        // For Phantom, we need to use the Solana web3.js library
-                        // This is a simplified example - in production you'd use @solana/web3.js
                         const lamports = parseFloat(amount) * 1e9; // Convert SOL to lamports
 
-                        alert('Solana transfer functionality requires @solana/web3.js library.\\nPlease implement using Transaction and SystemProgram.transfer()');
+                        // Create connection to Solana devnet
+                        const connection = new solanaWeb3.Connection(
+                            solanaWeb3.clusterApiUrl('devnet'),
+                            'confirmed'
+                        );
 
-                        // Placeholder for actual implementation
-                        console.log('Transfer request:', { to: toAddress, amount: lamports });
+                        // Create transaction
+                        const transaction = new solanaWeb3.Transaction().add(
+                            solanaWeb3.SystemProgram.transfer({
+                                fromPubkey: solanaProvider.publicKey,
+                                toPubkey: new solanaWeb3.PublicKey(toAddress),
+                                lamports: lamports,
+                            })
+                        );
+
+                        // Get recent blockhash
+                        transaction.feePayer = solanaProvider.publicKey;
+                        const { blockhash } = await connection.getRecentBlockhash();
+                        transaction.recentBlockhash = blockhash;
+
+                        // Sign and send transaction
+                        const signed = await solanaProvider.signAndSendTransaction(transaction);
+                        const txHash = signed.signature;
+
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({
+                                type: 'transaction',
+                                chain: 'solana',
+                                txHash: txHash,
+                                from: state.wallet_state.solana.address,
+                                to: toAddress,
+                                amount: amount
+                            }));
+                        }
+
+                        alert(`Transaction sent!\\nTx Hash: ${txHash}\\nView on Solscan: https://solscan.io/tx/${txHash}?cluster=devnet`);
                     } catch (error) {
                         console.error('Transfer error:', error);
                         alert('Failed to send transaction: ' + error.message);
