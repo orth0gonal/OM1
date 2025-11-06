@@ -57,8 +57,8 @@ HTML_CONTENT = """
         <meta charset="utf-8">
         <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
         <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
-        <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
-        <script src="https://cdn.ethers.io/lib/ethers-5.6.umd.min.js"></script>
+        <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
         <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
         <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
         <style>
@@ -435,7 +435,7 @@ HTML_CONTENT = """
                                     <p className="text-sm mb-3 opacity-90">MetaMask, Coinbase Wallet, etc.</p>
 
                                     {walletState.evm.connected ? (
-                                        <>
+                                        <div>
                                             <div className="status-badge status-connected mb-3">Connected</div>
                                             <p className="text-sm mb-2 font-mono bg-white bg-opacity-20 p-2 rounded">
                                                 {walletState.evm.address?.substring(0, 10)}...
@@ -455,9 +455,9 @@ HTML_CONTENT = """
                                                     🔌 Disconnect
                                                 </button>
                                             </div>
-                                        </>
+                                        </div>
                                     ) : (
-                                        <>
+                                        <div>
                                             <div className="status-badge status-disconnected mb-3">Disconnected</div>
                                             <button
                                                 className="wallet-button w-full"
@@ -466,7 +466,7 @@ HTML_CONTENT = """
                                             >
                                                 {evmProvider ? '🔗 Connect EVM Wallet' : '❌ No EVM Wallet Detected'}
                                             </button>
-                                        </>
+                                        </div>
                                     )}
                                 </div>
 
@@ -476,7 +476,7 @@ HTML_CONTENT = """
                                     <p className="text-sm mb-3 opacity-90">Phantom, Solflare, etc.</p>
 
                                     {walletState.solana.connected ? (
-                                        <>
+                                        <div>
                                             <div className="status-badge status-connected mb-3">Connected</div>
                                             <p className="text-sm mb-2 font-mono bg-white bg-opacity-20 p-2 rounded">
                                                 {walletState.solana.address?.substring(0, 10)}...
@@ -496,9 +496,9 @@ HTML_CONTENT = """
                                                     🔌 Disconnect
                                                 </button>
                                             </div>
-                                        </>
+                                        </div>
                                     ) : (
-                                        <>
+                                        <div>
                                             <div className="status-badge status-disconnected mb-3">Disconnected</div>
                                             <button
                                                 className="wallet-button w-full"
@@ -507,7 +507,7 @@ HTML_CONTENT = """
                                             >
                                                 {solanaProvider ? '🔗 Connect Solana Wallet' : '❌ No Solana Wallet Detected'}
                                             </button>
-                                        </>
+                                        </div>
                                     )}
                                 </div>
                             </div>
