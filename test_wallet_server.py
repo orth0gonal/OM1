@@ -657,14 +657,22 @@ async def health_check():
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Multi-Wallet Test Server')
+    parser.add_argument('--port', type=int, default=8001, help='Port to run the server on (default: 8001)')
+    args = parser.parse_args()
+
+    port = args.port
+
     logger.info("=" * 60)
     logger.info("Multi-Wallet Test Server Starting...")
     logger.info("=" * 60)
     logger.info("")
-    logger.info("🌐 Server will be available at: http://localhost:8000")
+    logger.info(f"🌐 Server will be available at: http://localhost:{port}")
     logger.info("")
     logger.info("📝 Testing Instructions:")
-    logger.info("  1. Open http://localhost:8000 in your browser")
+    logger.info(f"  1. Open http://localhost:{port} in your browser")
     logger.info("  2. Install MetaMask and/or Phantom wallet extensions")
     logger.info("  3. Get testnet funds:")
     logger.info("     - Base Sepolia ETH: https://www.base.org/faucet")
@@ -676,6 +684,6 @@ if __name__ == "__main__":
     uvicorn.run(
         app,
         host="0.0.0.0",
-        port=8000,
+        port=port,
         log_level="info"
     )
