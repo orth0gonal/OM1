@@ -18,7 +18,6 @@ dependencies = [
     "pycdr2",
     "eclipse-zenoh>=1.4.0",
     "audiosegment",
-    "pyaudio",
     "openai>=1.59.5",
     "pillow>=11.1.0",
     "python-dotenv>=1.0.1",
@@ -56,6 +55,7 @@ dds = [
     "cyclonedds==0.10.2"
 ]
 macos = ["osascript"]
+audio = ["pyaudio"]
 
 [dependency-groups]
 dev = [

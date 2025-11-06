@@ -2477,7 +2477,6 @@ dependencies = [
     { name = "opencv-python" },
     { name = "pillow" },
     { name = "py-mjpeg" },
-    { name = "pyaudio" },
     { name = "pycdr2" },
     { name = "pydub" },
     { name = "pynmeagps" },
@@ -2502,6 +2501,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+audio = [
+    { name = "pyaudio" },
+]
 dds = [
     { name = "cyclonedds" },
 ]
@@ -2546,7 +2548,7 @@ requires-dist = [
     { name = "osascript", marker = "extra == 'macos'" },
     { name = "pillow", specifier = ">=11.1.0" },
     { name = "py-mjpeg" },
-    { name = "pyaudio" },
+    { name = "pyaudio", marker = "extra == 'audio'" },
     { name = "pycdr2" },
     { name = "pydub", specifier = ">=0.25.1" },
     { name = "pynmeagps" },
@@ -2569,7 +2571,7 @@ requires-dist = [
     { name = "web3" },
     { name = "websockets", specifier = ">=12.0" },
 ]
-provides-extras = ["dds", "macos"]
+provides-extras = ["dds", "macos", "audio"]
 
 [package.metadata.requires-dev]
 dev = [
