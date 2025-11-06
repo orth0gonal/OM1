@@ -30,6 +30,8 @@ dependencies = [
     "web3",
     "numpy",
     "cdp-sdk==0.21.0",
+    "solana>=0.34.3",
+    "solders>=0.21.0",
     "hid",
     "cv_bridge",
     "torch",
